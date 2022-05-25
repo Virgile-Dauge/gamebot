@@ -1,0 +1,441 @@
+This file is part of Invabot.
+
+Invabot is free software: you can redistribute it and/or modify it
+under the terms of the GNU General Public License as published by the
+Free Software Foundation, either version 3 of the License, or any
+later version.
+
+Invabot is distributed in the hope that it will be useful, but WITHOUT
+ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License
+for more details.
+
+You should have received a copy of the GNU General Public License
+along with Invabot. If not, see https://www.gnu.org/licenses/
+
+#+PROPERTY: header-args+ :comments both
+#+PROPERTY: header-args+ :mkdirp yes
+#+PROPERTY: header-args+ :padline yes
+#+STARTUP: overview
+
+#+SETUPFILE: https://fniessen.github.io/org-html-themes/org/theme-readtheorg.setup
+#+title: Gamebot
+
+* Bot
+  :PROPERTIES:
+  :header-args: :tangle ./bot.py :comments both :padline yes
+  :END:
+** Licence
+#+begin_src python
+# This file is part of Invabot.
+
+# Invabot is free software: you can redistribute it
+# and/or modify it under the terms of the GNU General
+# Public License as published by the Free Software
+# Foundation, either version 3 of the License, or
+# any later version.
+
+# Invabot is distributed in the hope that it will be
+# useful, but WITHOUT ANY WARRANTY; without even the
+# implied warranty of MERCHANTABILITY or FITNESS FOR A
+# PARTICULAR PURPOSE. See the GNU General Public License
+# for more details.
+
+# You should have received a copy of the GNU General
+# Public License along with Invabot. If not, see
+# <https://www.gnu.org/licenses/>
+
+#+end_src
+
+** Dépendances
+#+begin_src python
+  import disnake
+  from disnake.ext import commands
+  from disnake import Embed, Emoji
+
+  from tinydb import TinyDB, Query
+
+  import requests
+
+  import pprint
+#+end_src
+** Déclaration du bot :
+#+begin_src python
+bot = commands.Bot(
+            intents=disnake.Intents().all(),
+            test_guilds=[955171411780046859], # Optional
+            sync_commands_debug=True
+        )
+#+end_src
+
+** Déclaration de la Base de données
+
+#+begin_src python
+
+#+end_src
+
+** Récupération du token Rawg
+ #+begin_src python
+   with open('rawg.token', 'r') as datafile:
+       token = datafile.read().replace('\n', '')
+ #+end_src
+** Slash commands
+*** Ajouter un jeu
+ #+begin_src python
+   @bot.slash_command()
+   async def ajouter(ctx: disnake.ApplicationCommandInteraction, nom: str):
+       """Liste les jeux de la commu
+
+           Parameters
+           ----------
+           nom: Nom du jeu
+       """
+       await ctx.response.defer()
+       payload = {'key': token, 'search': nom,
+                  'search_exact': True,
+                  'exclude_additions': True,
+                  'platforms': '4'}
+       response = requests.get('https://api.rawg.io/api/games', params=payload)
+       l = response.json()['results']
+
+       if len(l) != 1:
+           # Mécanisme de séléction par l'utilisateur à implémenter
+           propositions = [g['name'] for g in l]
+           await ctx.edit_original_message(content=propositions)
+
+       id = l[0]['id']
+       payload = {'key': token}
+       response = requests.get(f'https://api.rawg.io/api/games/{id}', params=payload)
+       l = response.json()
+       pprint.pprint(l)
+
+
+ #+end_src
+*** Lister les jeux dispos
+ #+begin_src python
+   @bot.slash_command()
+   async def list(ctx: disnake.ApplicationCommandInteraction):
+       """Liste les jeux de la commu
+
+           Parameters
+           ----------
+       """
+       print('coucou')
+
+
+ #+end_src
+** Point de départ du script
+#+begin_src python
+  def main():
+      bot.run(token=open("bot.token").read().replace('\n', ''))
+  if __name__ == "__main__":
+      main()
+#+end_src
+
+* Test database
+[[https://tinydb.readthedocs.io/en/latest/][TinyDB]]
+
+#+begin_src python :session test
+  from tinydb import TinyDB, Query, where
+  with TinyDB('db.json') as db:
+      q = Query()
+      #db.insert({'name': 'games', 'items': ['a', 'b']})
+      #db.update({'name': 'enrol', 'items': {'idMesage': 'gamekey'}}, where('name') == 'enrol')
+      print(db.search(where('name') == 'enrol'))
+      games = db.table('games')
+      games.insert({'name': 'coucou'})
+      enrol = db.table('enrol')
+      if not enrol.contains(where('name') == 'enrol'):
+          enrol.insert({'name': 'coucou'}, doc_id=1)
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+: []
+# [goto error]
+: ---------------------------------------------------------------------------
+: TypeError                                 Traceback (most recent call last)
+: Input In [31], in <cell line: 2>()
+:       9 enrol = db.table('enrol')
+:      10 if not enrol.contains(where('name') == 'enrol'):
+: ---> 11     enrol.insert({'name': 'coucou'}, doc_id=1)
+:
+: TypeError: Table.insert() got an unexpected keyword argument 'doc_id'
+:END:
+
+** mini lib
+  :PROPERTIES:
+  :header-args: :tangle ./db.py :comments both :padline yes
+  :END:
+
+*** Dépendances
+#+begin_src python :session testdb
+  from tinydb import TinyDB, Query, where, Document
+
+  from typing import List, Dict
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+# [goto error]
+: ---------------------------------------------------------------------------
+: ImportError                               Traceback (most recent call last)
+: Input In [62], in <cell line: 1>()
+: ----> 1 from tinydb import TinyDB, Query, where, Document
+:       3 from typing import List, Dict
+:
+: ImportError: cannot import name 'Document' from 'tinydb' (/home/virgile/anaconda3/envs/py310/lib/python3.10/site-packages/tinydb/__init__.py)
+:END:
+
+
+*** Jeu de test
+Récupération des jeux enregistrés
+#+begin_src python :session testdb
+  def make_testdb() -> None:
+      with TinyDB('db.json') as db:
+          enrol = db.table('enrol')
+          enrol.upsert({'123456789': 'Super game'}, doc_ids=[1])
+          enrol.upsert({'987654321': 'Super game à lenvers'}, doc_ids=[1])
+#+end_src
+
+#+RESULTS:
+
+#+begin_src python :session testdb :tangle no
+make_testdb()
+
+#+end_src
+
+#+RESULTS:
+:RESULTS:
+# [goto error]
+#+begin_example
+  ---------------------------------------------------------------------------
+  TypeError                                 Traceback (most recent call last)
+  Input In [77], in <cell line: 1>()
+  ----> 1 make_testdb()
+
+  Input In [76], in make_testdb()
+        2 with TinyDB('db.json') as db:
+        3     enrol = db.table('enrol')
+  ----> 4     enrol.upsert({'123456789': 'Super game'}, doc_ids=[1])
+        5     enrol.upsert({'987654321': 'Super game à lenvers'}, doc_ids=[1])
+
+  TypeError: Table.upsert() got an unexpected keyword argument 'doc_ids'
+#+end_example
+:END:
+
+*** Lecture des données
+Récupération des jeux enregistrés
+#+begin_src python :session testdb
+  def get_games() -> List[Dict]:
+      with TinyDB('db.json') as db:
+          return list(db.table('games'))
+
+#+end_src
+
+#+RESULTS:
+
+#+begin_src python :session testdb :tangle no
+  print(get_games())
+#+end_src
+
+#+RESULTS:
+: [{'name': 'coucou'}, {'name': 'coucou'}]
+
+Récupération d'un jeu en particulier
+#+begin_src python :session testdb
+  def get_game(key: str) -> Dict | None:
+      with TinyDB('db.json') as db:
+          games = db.table('games')
+          return db.table('games').get(where('name') == key)
+#+end_src
+
+#+RESULTS:
+
+#+begin_src python :session testdb :tangle no
+  print(get_game('coucou'))
+  print(get_game('truccoucou'))
+#+end_src
+
+#+RESULTS:
+: {'name': 'coucou'}
+: None
+
+Récupération de la liste des message d'enrôlement
+#+begin_src python :session testdb
+  def get_enrol() -> List[Dict]:
+      with TinyDB('db.json') as db:
+          return list(db.table('enrol'))
+#+end_src
+
+#+RESULTS:
+
+#+begin_src python :session testdb :tangle no
+  print(get_enrol())
+#+end_src
+
+#+RESULTS:
+: [{'name': 'coucou'}, {'name': 'coucou'}]
+
+* Test api
+#+begin_src python :session test
+  import requests
+#+end_src
+
+#+RESULTS:
+
+Chargement token rawg API
+ #+begin_src python :session test
+   # Chargement du token
+   with open('rawg.token', 'r') as datafile:
+       token = datafile.read().replace('\n', '')
+ #+end_src
+
+ #+RESULTS:
+
+ #+begin_src python :session test
+   #headers = {'Authorization': f'Bearer {token}'}
+   payload = {'key': token, 'search': 'Tribes of Midgard',
+              'search_exact': 'True',
+              'platforms': '4'}
+   response = requests.get('https://api.rawg.io/api/games', params=payload)
+   l = response.json()['results']
+   print(l)
+#+end_src
+
+#+RESULTS:
+: [{'slug': 'tribes-of-midgard', 'name': 'Tribes of Midgard', 'playtime': 7, 'platforms': [{'platform': {'id': 4, 'name': 'PC', 'slug': 'pc'}}, {'platform': {'id': 187, 'name': 'PlayStation 5', 'slug': 'playstation5'}}, {'platform': {'id': 18, 'name': 'PlayStation 4', 'slug': 'playstation4'}}], 'stores': [{'store': {'id': 1, 'name': 'Steam', 'slug': 'steam'}}, {'store': {'id': 3, 'name': 'PlayStation Store', 'slug': 'playstation-store'}}, {'store': {'id': 11, 'name': 'Epic Games', 'slug': 'epic-games'}}], 'released': '2021-07-27', 'tba': False, 'background_image': 'https://media.rawg.io/media/games/e71/e712a5b2e9fc0e7a7789baa42636af67.jpg', 'rating': 3.78, 'rating_top': 4, 'ratings': [{'id': 4, 'title': 'recommended', 'count': 16, 'percent': 69.57}, {'id': 3, 'title': 'meh', 'count': 6, 'percent': 26.09}, {'id': 5, 'title': 'exceptional', 'count': 1, 'percent': 4.35}], 'ratings_count': 23, 'reviews_text_count': 0, 'added': 397, 'added_by_status': {'yet': 10, 'owned': 320, 'beaten': 7, 'toplay': 31, 'dropped': 19, 'playing': 10}, 'metacritic': 72, 'suggestions_count': 454, 'updated': '2022-02-22T13:01:39', 'id': 350505, 'score': '19.893322', 'clip': None, 'tags': [{'id': 42417, 'name': 'Экшен', 'slug': 'ekshen', 'language': 'rus', 'games_count': 26872, 'image_background': 'https://media.rawg.io/media/games/46d/46d98e6910fbc0706e2948a7cc9b10c5.jpg'}, {'id': 42392, 'name': 'Приключение', 'slug': 'prikliuchenie', 'language': 'rus', 'games_count': 24915, 'image_background': 'https://media.rawg.io/media/games/b8c/b8c243eaa0fbac8115e0cdccac3f91dc.jpg'}, {'id': 42398, 'name': 'Инди', 'slug': 'indi-2', 'language': 'rus', 'games_count': 40173, 'image_background': 'https://media.rawg.io/media/games/8cc/8cce7c0e99dcc43d66c8efd42f9d03e3.jpg'}, {'id': 7, 'name': 'Multiplayer', 'slug': 'multiplayer', 'language': 'eng', 'games_count': 30958, 'image_background': 'https://media.rawg.io/media/games/b72/b7233d5d5b1e75e86bb860ccc7aeca85.jpg'}, {'id': 18, 'name': 'Co-op', 'slug': 'co-op', 'language': 'eng', 'games_count': 8328, 'image_background': 'https://media.rawg.io/media/games/d58/d588947d4286e7b5e0e12e1bea7d9844.jpg'}, {'id': 40845, 'name': 'Partial Controller Support', 'slug': 'partial-controller-support', 'language': 'eng', 'games_count': 8382, 'image_background': 'https://media.rawg.io/media/games/4e0/4e0e7b6d6906a131307c94266e5c9a1c.jpg'}, {'id': 9, 'name': 'Online Co-Op', 'slug': 'online-co-op', 'language': 'eng', 'games_count': 3494, 'image_background': 'https://media.rawg.io/media/games/0bd/0bd5646a3d8ee0ac3314bced91ea306d.jpg'}, {'id': 397, 'name': 'Online multiplayer', 'slug': 'online-multiplayer', 'language': 'eng', 'games_count': 3804, 'image_background': 'https://media.rawg.io/media/screenshots/65c/65c9c15e274705b5fe343e424ce76ec8.jpg'}, {'id': 37796, 'name': 'exclusive', 'slug': 'exclusive', 'language': 'eng', 'games_count': 4513, 'image_background': 'https://media.rawg.io/media/games/cc1/cc196a5ad763955d6532cdba236f730c.jpg'}], 'esrb_rating': None, 'user_game': None, 'reviews_count': 23, 'saturated_color': '0f0f0f', 'dominant_color': '0f0f0f', 'short_screenshots': [{'id': -1, 'image': 'https://media.rawg.io/media/games/e71/e712a5b2e9fc0e7a7789baa42636af67.jpg'}, {'id': 2011537, 'image': 'https://media.rawg.io/media/screenshots/60b/60bedc806f8ec9315e928cdb1c57afc0.jpg'}, {'id': 2011538, 'image': 'https://media.rawg.io/media/screenshots/590/59027eb26d471fde9247548a896d4dd6.jpg'}, {'id': 2011539, 'image': 'https://media.rawg.io/media/screenshots/4b8/4b8e9d2b3fd6b4f49be3a00bbfc81982.jpg'}, {'id': 2011540, 'image': 'https://media.rawg.io/media/screenshots/c94/c94d855d543baa0df0d348932deb87f4.jpg'}, {'id': 2011541, 'image': 'https://media.rawg.io/media/screenshots/7b1/7b18c0278bceec4c7ed9ab9b9a35ab80.jpg'}, {'id': 2011542, 'image': 'https://media.rawg.io/media/screenshots/669/6690c3ec9181739c23dea2e82c16d3e3.jpg'}], 'parent_platforms': [{'platform': {'id': 1, 'name': 'PC', 'slug': 'pc'}}, {'platform': {'id': 2, 'name': 'PlayStation', 'slug': 'playstation'}}], 'genres': [{'id': 51, 'name': 'Indie', 'slug': 'indie'}, {'id': 3, 'name': 'Adventure', 'slug': 'adventure'}, {'id': 4, 'name': 'Action', 'slug': 'action'}]}, {'slug': 'tribes-of-midgard-open-beta', 'name': 'Tribes of Midgard - Open Beta', 'playtime': 0, 'platforms': [{'platform': {'id': 4, 'name': 'PC', 'slug': 'pc'}}], 'stores': [{'store': {'id': 1, 'name': 'Steam', 'slug': 'steam'}}], 'released': '2019-07-22', 'tba': False, 'background_image': 'https://media.rawg.io/media/screenshots/48e/48ea9253fbb224d27949c066b0cd7a8f.jpg', 'rating': 0.0, 'rating_top': 0, 'ratings': [], 'ratings_count': 0, 'reviews_text_count': 0, 'added': 2, 'added_by_status': {'toplay': 2}, 'metacritic': None, 'suggestions_count': 455, 'updated': '2019-08-23T12:10:54', 'id': 349352, 'score': '15.623183', 'clip': None, 'tags': [{'id': 42417, 'name': 'Экшен', 'slug': 'ekshen', 'language': 'rus', 'games_count': 22718, 'image_background': 'https://media.rawg.io/media/games/f87/f87457e8347484033cb34cde6101d08d.jpg'}, {'id': 42392, 'name': 'Приключение', 'slug': 'prikliuchenie', 'language': 'rus', 'games_count': 20711, 'image_background': 'https://media.rawg.io/media/games/588/588c6bdff3d4baf66ec36b1c05b793bf.jpg'}, {'id': 42398, 'name': 'Инди', 'slug': 'indi-2', 'language': 'rus', 'games_count': 35230, 'image_background': 'https://media.rawg.io/media/games/ffe/ffed87105b14f5beff72ff44a7793fd5.jpg'}, {'id': 7, 'name': 'Multiplayer', 'slug': 'multiplayer', 'language': 'eng', 'games_count': 25879, 'image_background': 'https://media.rawg.io/media/games/15c/15c95a4915f88a3e89c821526afe05fc.jpg'}, {'id': 18, 'name': 'Co-op', 'slug': 'co-op', 'language': 'eng', 'games_count': 6858, 'image_background': 'https://media.rawg.io/media/games/0bd/0bd5646a3d8ee0ac3314bced91ea306d.jpg'}, {'id': 40845, 'name': 'Partial Controller Support', 'slug': 'partial-controller-support', 'language': 'eng', 'games_count': 7381, 'image_background': 'https://media.rawg.io/media/games/9fa/9fa63622543e5d4f6d99aa9d73b043de.jpg'}, {'id': 9, 'name': 'Online Co-Op', 'slug': 'online-co-op', 'language': 'eng', 'games_count': 2755, 'image_background': 'https://media.rawg.io/media/games/34b/34b1f1850a1c06fd971bc6ab3ac0ce0e.jpg'}, {'id': 397, 'name': 'Online multiplayer', 'slug': 'online-multiplayer', 'language': 'eng', 'games_count': 3797, 'image_background': 'https://media.rawg.io/media/games/33d/33df5a032898b8ab7e3773c7a5f1d336.jpg'}], 'esrb_rating': None, 'user_game': None, 'reviews_count': 0, 'community_rating': 0, 'saturated_color': '0f0f0f', 'dominant_color': '0f0f0f', 'short_screenshots': [{'id': -1, 'image': 'https://media.rawg.io/media/screenshots/48e/48ea9253fbb224d27949c066b0cd7a8f.jpg'}, {'id': 2008346, 'image': 'https://media.rawg.io/media/screenshots/0df/0dfd1793a2ffe4488bb1668b29d89abf.jpg'}, {'id': 2008347, 'image': 'https://media.rawg.io/media/screenshots/1f6/1f6a40121225f9b7b683279df778be78.jpg'}, {'id': 2008348, 'image': 'https://media.rawg.io/media/screenshots/e84/e84b02fcbf8545b3120c81c83784001e.jpg'}, {'id': 2008349, 'image': 'https://media.rawg.io/media/screenshots/2e2/2e2b76de7f1f8c3a61c15c18892e3bd4.jpg'}, {'id': 2008350, 'image': 'https://media.rawg.io/media/screenshots/0f2/0f2df2e59c7c96f5e12cf9a6f5e37b6c.jpg'}, {'id': 2008351, 'image': 'https://media.rawg.io/media/screenshots/b94/b948cd95904a86b522bd17e5b7266a2a.jpg'}], 'parent_platforms': [{'platform': {'id': 1, 'name': 'PC', 'slug': 'pc'}}], 'genres': [{'id': 51, 'name': 'Indie', 'slug': 'indie'}, {'id': 3, 'name': 'Adventure', 'slug': 'adventure'}, {'id': 4, 'name': 'Action', 'slug': 'action'}]}]
+
+#+begin_src python :session test
+  print(len(l), [g['name'] for g in l])
+#+end_src
+
+#+RESULTS:
+: 2 ['Tribes of Midgard', 'Tribes of Midgard - Open Beta']
+
+ #+begin_src python :session test
+   import pprint
+   pprint.pprint(l[0])
+#+end_src
+
+#+RESULTS:
+#+begin_example
+  {'added': 397,
+   'added_by_status': {'beaten': 7,
+                       'dropped': 19,
+                       'owned': 320,
+                       'playing': 10,
+                       'toplay': 31,
+                       'yet': 10},
+   'background_image': 'https://media.rawg.io/media/games/e71/e712a5b2e9fc0e7a7789baa42636af67.jpg',
+   'clip': None,
+   'dominant_color': '0f0f0f',
+   'esrb_rating': None,
+   'genres': [{'id': 51, 'name': 'Indie', 'slug': 'indie'},
+              {'id': 3, 'name': 'Adventure', 'slug': 'adventure'},
+              {'id': 4, 'name': 'Action', 'slug': 'action'}],
+   'id': 350505,
+   'metacritic': 72,
+   'name': 'Tribes of Midgard',
+   'parent_platforms': [{'platform': {'id': 1, 'name': 'PC', 'slug': 'pc'}},
+                        {'platform': {'id': 2,
+                                      'name': 'PlayStation',
+                                      'slug': 'playstation'}}],
+   'platforms': [{'platform': {'id': 4, 'name': 'PC', 'slug': 'pc'}},
+                 {'platform': {'id': 187,
+                               'name': 'PlayStation 5',
+                               'slug': 'playstation5'}},
+                 {'platform': {'id': 18,
+                               'name': 'PlayStation 4',
+                               'slug': 'playstation4'}}],
+   'playtime': 7,
+   'rating': 3.78,
+   'rating_top': 4,
+   'ratings': [{'count': 16, 'id': 4, 'percent': 69.57, 'title': 'recommended'},
+               {'count': 6, 'id': 3, 'percent': 26.09, 'title': 'meh'},
+               {'count': 1, 'id': 5, 'percent': 4.35, 'title': 'exceptional'}],
+   'ratings_count': 23,
+   'released': '2021-07-27',
+   'reviews_count': 23,
+   'reviews_text_count': 0,
+   'saturated_color': '0f0f0f',
+   'score': '19.893322',
+   'short_screenshots': [{'id': -1,
+                          'image': 'https://media.rawg.io/media/games/e71/e712a5b2e9fc0e7a7789baa42636af67.jpg'},
+                         {'id': 2011537,
+                          'image': 'https://media.rawg.io/media/screenshots/60b/60bedc806f8ec9315e928cdb1c57afc0.jpg'},
+                         {'id': 2011538,
+                          'image': 'https://media.rawg.io/media/screenshots/590/59027eb26d471fde9247548a896d4dd6.jpg'},
+                         {'id': 2011539,
+                          'image': 'https://media.rawg.io/media/screenshots/4b8/4b8e9d2b3fd6b4f49be3a00bbfc81982.jpg'},
+                         {'id': 2011540,
+                          'image': 'https://media.rawg.io/media/screenshots/c94/c94d855d543baa0df0d348932deb87f4.jpg'},
+                         {'id': 2011541,
+                          'image': 'https://media.rawg.io/media/screenshots/7b1/7b18c0278bceec4c7ed9ab9b9a35ab80.jpg'},
+                         {'id': 2011542,
+                          'image': 'https://media.rawg.io/media/screenshots/669/6690c3ec9181739c23dea2e82c16d3e3.jpg'}],
+   'slug': 'tribes-of-midgard',
+   'stores': [{'store': {'id': 1, 'name': 'Steam', 'slug': 'steam'}},
+              {'store': {'id': 3,
+                         'name': 'PlayStation Store',
+                         'slug': 'playstation-store'}},
+              {'store': {'id': 11, 'name': 'Epic Games', 'slug': 'epic-games'}}],
+   'suggestions_count': 454,
+   'tags': [{'games_count': 26872,
+             'id': 42417,
+             'image_background': 'https://media.rawg.io/media/games/46d/46d98e6910fbc0706e2948a7cc9b10c5.jpg',
+             'language': 'rus',
+             'name': 'Экшен',
+             'slug': 'ekshen'},
+            {'games_count': 24915,
+             'id': 42392,
+             'image_background': 'https://media.rawg.io/media/games/b8c/b8c243eaa0fbac8115e0cdccac3f91dc.jpg',
+             'language': 'rus',
+             'name': 'Приключение',
+             'slug': 'prikliuchenie'},
+            {'games_count': 40173,
+             'id': 42398,
+             'image_background': 'https://media.rawg.io/media/games/8cc/8cce7c0e99dcc43d66c8efd42f9d03e3.jpg',
+             'language': 'rus',
+             'name': 'Инди',
+             'slug': 'indi-2'},
+            {'games_count': 30958,
+             'id': 7,
+             'image_background': 'https://media.rawg.io/media/games/b72/b7233d5d5b1e75e86bb860ccc7aeca85.jpg',
+             'language': 'eng',
+             'name': 'Multiplayer',
+             'slug': 'multiplayer'},
+            {'games_count': 8328,
+             'id': 18,
+             'image_background': 'https://media.rawg.io/media/games/d58/d588947d4286e7b5e0e12e1bea7d9844.jpg',
+             'language': 'eng',
+             'name': 'Co-op',
+             'slug': 'co-op'},
+            {'games_count': 8382,
+             'id': 40845,
+             'image_background': 'https://media.rawg.io/media/games/4e0/4e0e7b6d6906a131307c94266e5c9a1c.jpg',
+             'language': 'eng',
+             'name': 'Partial Controller Support',
+             'slug': 'partial-controller-support'},
+            {'games_count': 3494,
+             'id': 9,
+             'image_background': 'https://media.rawg.io/media/games/0bd/0bd5646a3d8ee0ac3314bced91ea306d.jpg',
+             'language': 'eng',
+             'name': 'Online Co-Op',
+             'slug': 'online-co-op'},
+            {'games_count': 3804,
+             'id': 397,
+             'image_background': 'https://media.rawg.io/media/screenshots/65c/65c9c15e274705b5fe343e424ce76ec8.jpg',
+             'language': 'eng',
+             'name': 'Online multiplayer',
+             'slug': 'online-multiplayer'},
+            {'games_count': 4513,
+             'id': 37796,
+             'image_background': 'https://media.rawg.io/media/games/cc1/cc196a5ad763955d6532cdba236f730c.jpg',
+             'language': 'eng',
+             'name': 'exclusive',
+             'slug': 'exclusive'}],
+   'tba': False,
+   'updated': '2022-02-22T13:01:39',
+   'user_game': None}
+#+end_example
